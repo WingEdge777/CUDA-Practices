@@ -93,3 +93,7 @@ if __name__ == "__main__":
             b_my = torch.zeros_like(b)
             benchmark(lib.norm_fp32x4, a, b_my, prefix="norm_fp32x4")
             diff_check(b, b_my, prefix="norm_fp32x4")
+
+            b_my = torch.zeros_like(b)
+            benchmark(lib.norm_fp32x4_split_k, a, b_my, prefix="norm_fp32x4_split_k")
+            diff_check(b, b_my, prefix="norm_fp32x4_split_k")
