@@ -7,6 +7,7 @@ norm kernels calculate y = (x - mean) / std
 - [x] naive Torch norm
 - [x] norm — FP32
 - [x] norm — FP32x4
+- [x] norm — FP32x4 split-k
 - [x] pytorch op bindings && diff check
 
 ## Run tests
