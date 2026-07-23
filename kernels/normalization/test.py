@@ -75,7 +75,6 @@ def diff_check(a, b, prefix="torch", eps=1e-3):
 
 
 def test():
-    device = torch.device("cuda")
     bs = [64, 128, 512, 1024, 4096]
     sz = [2048, 4096, 8192, 12800]
     torch.manual_seed(42)
@@ -100,7 +99,32 @@ def test():
             # benchmark(lib.norm_fp32x4_split_k, a, b_my, prefix="norm_fp32x4_split_k")
             # diff_check(b, b_my, prefix="norm_fp32x4_split_k")
 
+def test_split_k():
+    bs = [1,4,8,16]
+    sz = [8192, 12800, 102400]
+    torch.manual_seed(42)
+    for n in bs:
+        for m in sz:
+            print("#" * 100)
+            print(f"n: {n}, m: {m}")
+            a = torch.randn(n, m).float().cuda()
+            b = torch.randn(n, m).float().cuda()
+
+            b = benchmark(norm, a)
+
+            b_my = torch.zeros_like(b)
+            benchmark(lib.norm_fp32, a, b_my, prefix="norm_fp32")
+            diff_check(b, b_my, prefix="norm_fp32")
+
+            b_my = torch.zeros_like(b)
+            benchmark(lib.norm_fp32x4, a, b_my, prefix="norm_fp32x4")
+            diff_check(b, b_my, prefix="norm_fp32x4")
+
+            b_my = torch.zeros_like(b)
+            benchmark(lib.norm_fp32x4_split_k, a, b_my, prefix="norm_fp32x4_split_k")
+            diff_check(b, b_my, prefix="norm_fp32x4_split_k")
 
 if __name__ == "__main__":
     # test the kernel
-    test()
+    # test()
+    test_split_k()
