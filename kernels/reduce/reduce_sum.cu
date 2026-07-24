@@ -350,7 +350,6 @@ binding_func_gen_int(reduce_sum_i8x16_packed_dp4a, 16, int);
 binding_func_gen_int(reduce_sum_i8x64_packed_dp4a, 64, int);
 
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(reduce_sum);

@@ -1,3 +1,4 @@
+#include "../../kernels/common/pack.cuh"
 #include <cstdio>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -9,9 +10,6 @@
 #include <ATen/cuda/CUDAContext.h>
 #include <torch/extension.h>
 #include <torch/types.h>
-
-#define FLOAT4(value) (reinterpret_cast<float4 *>(&(value))[0])
-#define HALF2(value) (reinterpret_cast<half2 *>(&(value))[0])
 
 __device__ __noinline__ void scale_by_ptr(float4 *ptr) {
     half2 *h2_ptr = reinterpret_cast<half2 *>(ptr);
@@ -86,7 +84,6 @@ binding_func_gen(load_fp16x8_bad, 4, half);
 binding_func_gen(load_fp16x8_good, 4, half);
 
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(load_fp16x8_native);

@@ -312,7 +312,6 @@ binding_smem_func_gen(rmsnorm_fp32x4_smem, 16, float);
 binding_func_gen(rmsnorm_fp16x8_packed, 8, half);
 binding_smem_func_gen(rmsnorm_fp16x8_packed_smem, 16, half);
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(rmsnorm);

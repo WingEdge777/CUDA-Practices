@@ -52,7 +52,6 @@
                  : "=f"(C0), "=f"(C1), "=f"(C2), "=f"(C3)                                                              \
                  : "r"(A0), "r"(A1), "r"(A2), "r"(A3), "r"(B0), "r"(B1), "f"(C0), "f"(C1), "f"(C2), "f"(C3))
 
-
 // ------------------------------------------ ldmatrix + mma  ----------------------------------------------------
 
 // a block calculate c[128][128]
@@ -925,7 +924,6 @@ binding_tiled_func_gen(hgemm_bcf_dbf_rw);
 extern void hgemm_cublas(torch::Tensor a, torch::Tensor b, torch::Tensor c);
 
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(hgemm_cublas);

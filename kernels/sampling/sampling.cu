@@ -15,7 +15,8 @@
 
 // stable insertion sort
 template <const int TOP_K>
-__device__ __forceinline__ bool insert_sorted(float (&score)[TOP_K], int (&token_id)[TOP_K], float new_val, int new_id) {
+__device__ __forceinline__ bool
+insert_sorted(float (&score)[TOP_K], int (&token_id)[TOP_K], float new_val, int new_id) {
     if (new_val <= score[TOP_K - 1])
         return false;
 
@@ -324,7 +325,7 @@ __global__ void sampling_topk_topp_split_k_pass2_kernel(
         }
         if (trunc_sum == 0.0f)
             trunc_sum = cumsum;
-        
+
         // curand
         curandStatePhilox4_32_10_t state;
         curand_init(seed, batch_id, offset, &state);
@@ -453,8 +454,6 @@ torch::Tensor sampling_topk_topp_split_k(torch::Tensor logits, int top_k, float 
 }
 
 binding_tiled_func_gen(sampling_topk_topp_batched);
-
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(sampling_topk_topp_batched);

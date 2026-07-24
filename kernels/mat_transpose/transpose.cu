@@ -256,7 +256,6 @@ binding_func_gen(transpose_smem_packed_bcf, 4, float);
 binding_func_gen(transpose_smem_swizzled_packed, 4, float);
 
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(transpose_coalesced_read);

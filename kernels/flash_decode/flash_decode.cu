@@ -634,8 +634,8 @@ inline CUtensorMap create_3d_tensor_map(T *global_address,
                                                        scale);
 
 #define DISPATCH_TMA_DBF_K_KERNEL(NAME, HEAD_DIM, CHUNK_SIZE)                                                          \
-    cudaFuncSetAttribute(NAME##_kernel<BN, CHUNK_SIZE, HEAD_DIM, 128, __nv_bfloat16>,                                 \
-                         cudaFuncAttributeMaxDynamicSharedMemorySize,                                                   \
+    cudaFuncSetAttribute(NAME##_kernel<BN, CHUNK_SIZE, HEAD_DIM, 128, __nv_bfloat16>,                                  \
+                         cudaFuncAttributeMaxDynamicSharedMemorySize,                                                  \
                          static_cast<int>(smem_bytes));                                                                \
     NAME##_kernel<BN, CHUNK_SIZE, HEAD_DIM, 128, __nv_bfloat16>                                                        \
         <<<blocks_per_grid, 128, smem_bytes, stream>>>(reinterpret_cast<__nv_bfloat16 *>(q.data_ptr()),                \
@@ -719,8 +719,6 @@ inline CUtensorMap create_3d_tensor_map(T *global_address,
 
 binding_tiled_tma_func_gen(flash_decode_tma, 128, 2, DISPATCH_TMA_KERNEL);
 binding_tiled_tma_func_gen(flash_decode_tma_dbf_k, 128, 3, DISPATCH_TMA_DBF_K_KERNEL);
-
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     // flash_decode_tma_128

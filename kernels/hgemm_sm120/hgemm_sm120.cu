@@ -803,7 +803,6 @@ binding_tiled_tma_func_gen(hgemm_tma_r_k_stages, 32);
 extern void hgemm_cublas(torch::Tensor a, torch::Tensor b, torch::Tensor c);
 
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(hgemm_cublas);

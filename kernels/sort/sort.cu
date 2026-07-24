@@ -38,8 +38,6 @@ __global__ void sort_kernel(T *x, T *y, int n) {}
 binding_func_gen(sort, 256);
 extern void cub_sort(torch::Tensor a, torch::Tensor b);
 
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
-
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(cub_sort);
     torch_pybinding_func(sort);

@@ -256,8 +256,6 @@ void norm_fp32x4_split_k(torch::Tensor a, torch::Tensor b) {
                                                  lda);
 }
 
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
-
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(norm_fp32);
     torch_pybinding_func(norm_fp32x4);

@@ -536,8 +536,6 @@ binding_single_launch_gen(softmax_extreme, 98304, softmax_onepass_kernel<256, 32
 binding_single_launch_gen(softmax_arbitrary, 0, softmax_arbitrary_kernel<256>);
 binding_splitk_gen(softmax_splitk, softmax_grid_pass1, softmax_grid_pass2);
 
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
-
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     // register only, one pass, fp32/fp16
     torch_pybinding_func(softmax);

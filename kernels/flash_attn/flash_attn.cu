@@ -611,8 +611,6 @@ inline CUtensorMap create_4d_tensor_map(T *global_address,
 
 binding_tiled_tma_func_gen(fmha_tma, 128);
 
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
-
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     // fmha_tma_128
     torch_pybinding_func(fmha_tma_128);

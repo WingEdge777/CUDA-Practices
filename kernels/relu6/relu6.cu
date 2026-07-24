@@ -142,7 +142,6 @@ binding_func_gen(relu6_fp16x8, 8, half);
 binding_func_gen(relu6_fp16x8_packed, 8, half);
 
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(relu6);

@@ -12,6 +12,8 @@
 #define BFLOAT2(value) (reinterpret_cast<__nv_bfloat162 *>(&(value))[0])
 #define LDST128BITS(value) (reinterpret_cast<float4 *>(&(value))[0])
 
+#define torch_pybinding_func(f) m.def(#f, &f, #f)
+
 const int WARP_SIZE = 32;
 
 union alignas(16) pack128 {

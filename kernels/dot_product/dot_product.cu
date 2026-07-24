@@ -200,7 +200,6 @@ binding_func_gen(dot_product_fp16x2, 2, half);
 binding_func_gen(dot_product_fp16x8_packed, 8, half);
 
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(dot_product);

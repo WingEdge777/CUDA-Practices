@@ -84,7 +84,6 @@ __global__ void rope_fp32x4_kernel(float *a, float *b, int seq_len, int head_dim
 binding_func_gen(rope, 1, float);
 binding_func_gen(rope_fp32x4, 4, float);
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(rope);

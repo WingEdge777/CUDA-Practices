@@ -14,7 +14,6 @@
 
 #define SWIZZLE_A(x, y) ((y) ^ ((x >> 2) << 3))
 
-
 // gemm fp32
 __global__ void sgemm_naive_kernel(float *a, float *b, float *c, int m, int n, int k) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -523,7 +522,6 @@ binding_tiled_func_gen(sgemm_at_bcf_swizzling_rw);
 binding_tiled_func_gen(sgemm_at_bcf_swizzling_dbf_rw);
 
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(sgemm_cublas);

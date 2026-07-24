@@ -308,8 +308,6 @@ void cumsum_fp32x4_multi_cta_scan(torch::Tensor a, torch::Tensor b) {
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
-
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(cumsum_fp32);
     torch_pybinding_func(cumsum_fp32x4);

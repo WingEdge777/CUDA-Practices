@@ -12,7 +12,6 @@
 
 #include "../common/pack.cuh"
 
-
 template <const int warp_size = WARP_SIZE>
 __device__ __forceinline__ float _warp_shuffle_reduce_sum(float val) {
 #pragma unroll
@@ -117,7 +116,6 @@ binding_func_gen(gemv, 1, float);
 binding_func_gen(gemv_fp32x4, 4, float);
 
 // binding
-#define torch_pybinding_func(f) m.def(#f, &f, #f)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(gemv);
