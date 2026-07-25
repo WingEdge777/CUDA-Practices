@@ -140,7 +140,8 @@ All kernels were tested on an RTX 5060 Laptop GPU (unless otherwise noted) and b
 - [cumsum](./kernels/cumsum/) - Warp-shuffle-based reductions
   - [x] naive Torch cumsum
   - [x] `cumsum_fp32`
-  - [x] `cumsum_fp32x4` — FP32 vectorized (×4)
+  - [x] `cumsum_fp32x4`
+  - [x] `cumsum_fp32x4_split_k`
   - [x] pytorch op bindings && diff check
 - [normalization](./kernels/normalization/) - (x - mean) / std
   - [x] naive Torch norm
