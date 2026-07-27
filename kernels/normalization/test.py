@@ -95,9 +95,16 @@ def test():
             benchmark(lib.norm_fp32x4, a, b_my, prefix="norm_fp32x4")
             diff_check(b, b_my, prefix="norm_fp32x4")
 
-            # b_my = torch.zeros_like(b)
-            # benchmark(lib.norm_fp32x4_split_k, a, b_my, prefix="norm_fp32x4_split_k")
-            # diff_check(b, b_my, prefix="norm_fp32x4_split_k")
+            a_h = a.half()
+            b_ref = norm(a_h.float()).half()
+
+            b_my = torch.zeros_like(a_h)
+            benchmark(lib.norm_fp16, a_h, b_my, prefix="norm_fp16")
+            diff_check(b_ref.float(), b_my.float(), prefix="norm_fp16", eps=2e-2)
+
+            b_my = torch.zeros_like(a_h)
+            benchmark(lib.norm_fp16x8_packed, a_h, b_my, prefix="norm_fp16x8_packed")
+            diff_check(b_ref.float(), b_my.float(), prefix="norm_fp16x8_packed", eps=2e-2)
 
 def test_split_k():
     bs = [1,4,8,16]
@@ -126,5 +133,5 @@ def test_split_k():
 
 if __name__ == "__main__":
     # test the kernel
-    # test()
-    test_split_k()
+    test()
+    # test_split_k()
