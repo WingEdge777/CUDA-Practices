@@ -103,102 +103,142 @@ norm_fp32x4_split_k            mean time: 0.041776 ms, speedup: 1.90
 ```bash
 ####################################################################################################
 n: 64, m: 2048
-torch                          mean time: 0.008720 ms
-norm_fp32                      mean time: 0.010832 ms, speedup: 0.81
-norm_fp32x4                    mean time: 0.009280 ms, speedup: 0.94
+torch                          mean time: 0.009440 ms
+norm_fp32                      mean time: 0.009824 ms, speedup: 0.96
+norm_fp32x4                    mean time: 0.011360 ms, speedup: 0.83
+norm_fp16                      mean time: 0.011216 ms, speedup: 0.84
+norm_fp16x8_packed             mean time: 0.010704 ms, speedup: 0.88
 ####################################################################################################
 n: 64, m: 4096
-torch                          mean time: 0.009456 ms
-norm_fp32                      mean time: 0.012672 ms, speedup: 0.75
-norm_fp32x4                    mean time: 0.013792 ms, speedup: 0.69
+torch                          mean time: 0.011040 ms
+norm_fp32                      mean time: 0.013360 ms, speedup: 0.83
+norm_fp32x4                    mean time: 0.013456 ms, speedup: 0.82
+norm_fp16                      mean time: 0.013472 ms, speedup: 0.82
+norm_fp16x8_packed             mean time: 0.011488 ms, speedup: 0.96
 ####################################################################################################
 n: 64, m: 8192
-torch                          mean time: 0.013664 ms
-norm_fp32                      mean time: 0.022016 ms, speedup: 0.62
-norm_fp32x4                    mean time: 0.019456 ms, speedup: 0.70
+torch                          mean time: 0.013696 ms
+norm_fp32                      mean time: 0.021792 ms, speedup: 0.63
+norm_fp32x4                    mean time: 0.019312 ms, speedup: 0.71
+norm_fp16                      mean time: 0.019776 ms, speedup: 0.69
+norm_fp16x8_packed             mean time: 0.013360 ms, speedup: 1.03
 ####################################################################################################
 n: 64, m: 12800
-torch                          mean time: 0.018128 ms
-norm_fp32                      mean time: 0.032112 ms, speedup: 0.56
-norm_fp32x4                    mean time: 0.029264 ms, speedup: 0.62
+torch                          mean time: 0.017776 ms
+norm_fp32                      mean time: 0.031904 ms, speedup: 0.56
+norm_fp32x4                    mean time: 0.021376 ms, speedup: 0.83
+norm_fp16                      mean time: 0.025568 ms, speedup: 0.70
+norm_fp16x8_packed             mean time: 0.014768 ms, speedup: 1.20
 ####################################################################################################
 n: 128, m: 2048
-torch                          mean time: 0.011808 ms
-norm_fp32                      mean time: 0.013376 ms, speedup: 0.88
-norm_fp32x4                    mean time: 0.013376 ms, speedup: 0.88
+torch                          mean time: 0.009536 ms
+norm_fp32                      mean time: 0.008160 ms, speedup: 1.17
+norm_fp32x4                    mean time: 0.011120 ms, speedup: 0.86
+norm_fp16                      mean time: 0.009792 ms, speedup: 0.97
+norm_fp16x8_packed             mean time: 0.008992 ms, speedup: 1.06
 ####################################################################################################
 n: 128, m: 4096
-torch                          mean time: 0.013936 ms
-norm_fp32                      mean time: 0.019712 ms, speedup: 0.71
-norm_fp32x4                    mean time: 0.017696 ms, speedup: 0.79
+torch                          mean time: 0.012976 ms
+norm_fp32                      mean time: 0.014944 ms, speedup: 0.87
+norm_fp32x4                    mean time: 0.014768 ms, speedup: 0.88
+norm_fp16                      mean time: 0.012272 ms, speedup: 1.06
+norm_fp16x8_packed             mean time: 0.011168 ms, speedup: 1.16
 ####################################################################################################
 n: 128, m: 8192
-torch                          mean time: 0.021920 ms
-norm_fp32                      mean time: 0.038336 ms, speedup: 0.57
-norm_fp32x4                    mean time: 0.036128 ms, speedup: 0.61
+torch                          mean time: 0.017920 ms
+norm_fp32                      mean time: 0.029600 ms, speedup: 0.61
+norm_fp32x4                    mean time: 0.026992 ms, speedup: 0.66
+norm_fp16                      mean time: 0.019584 ms, speedup: 0.92
+norm_fp16x8_packed             mean time: 0.014976 ms, speedup: 1.20
 ####################################################################################################
 n: 128, m: 12800
-torch                          mean time: 0.052016 ms
-norm_fp32                      mean time: 0.050432 ms, speedup: 1.03
-norm_fp32x4                    mean time: 0.048064 ms, speedup: 1.08
+torch                          mean time: 0.041424 ms
+norm_fp32                      mean time: 0.049440 ms, speedup: 0.84
+norm_fp32x4                    mean time: 0.049520 ms, speedup: 0.84
+norm_fp16                      mean time: 0.034992 ms, speedup: 1.18
+norm_fp16x8_packed             mean time: 0.021488 ms, speedup: 1.93
 ####################################################################################################
 n: 512, m: 2048
-torch                          mean time: 0.017472 ms
-norm_fp32                      mean time: 0.029904 ms, speedup: 0.58
-norm_fp32x4                    mean time: 0.027104 ms, speedup: 0.64
+torch                          mean time: 0.019104 ms
+norm_fp32                      mean time: 0.025600 ms, speedup: 0.75
+norm_fp32x4                    mean time: 0.025552 ms, speedup: 0.75
+norm_fp16                      mean time: 0.019120 ms, speedup: 1.00
+norm_fp16x8_packed             mean time: 0.014560 ms, speedup: 1.31
 ####################################################################################################
 n: 512, m: 4096
-torch                          mean time: 0.046032 ms
-norm_fp32                      mean time: 0.056512 ms, speedup: 0.81
-norm_fp32x4                    mean time: 0.052528 ms, speedup: 0.88
+torch                          mean time: 0.048064 ms
+norm_fp32                      mean time: 0.056416 ms, speedup: 0.85
+norm_fp32x4                    mean time: 0.054464 ms, speedup: 0.88
+norm_fp16                      mean time: 0.036608 ms, speedup: 1.31
+norm_fp16x8_packed             mean time: 0.030144 ms, speedup: 1.59
 ####################################################################################################
 n: 512, m: 8192
-torch                          mean time: 0.104880 ms
-norm_fp32                      mean time: 0.107616 ms, speedup: 0.97
-norm_fp32x4                    mean time: 0.103616 ms, speedup: 1.01
+torch                          mean time: 0.103648 ms
+norm_fp32                      mean time: 0.106768 ms, speedup: 0.97
+norm_fp32x4                    mean time: 0.103792 ms, speedup: 1.00
+norm_fp16                      mean time: 0.062496 ms, speedup: 1.66
+norm_fp16x8_packed             mean time: 0.053552 ms, speedup: 1.94
 ####################################################################################################
 n: 512, m: 12800
-torch                          mean time: 0.184000 ms
-norm_fp32                      mean time: 0.169296 ms, speedup: 1.09
-norm_fp32x4                    mean time: 0.167936 ms, speedup: 1.10
+torch                          mean time: 0.185216 ms
+norm_fp32                      mean time: 0.169520 ms, speedup: 1.09
+norm_fp32x4                    mean time: 0.165104 ms, speedup: 1.12
+norm_fp16                      mean time: 0.094672 ms, speedup: 1.96
+norm_fp16x8_packed             mean time: 0.084624 ms, speedup: 2.19
 ####################################################################################################
 n: 1024, m: 2048
-torch                          mean time: 0.048208 ms
-norm_fp32                      mean time: 0.055712 ms, speedup: 0.87
-norm_fp32x4                    mean time: 0.052384 ms, speedup: 0.92
+torch                          mean time: 0.047648 ms
+norm_fp32                      mean time: 0.054416 ms, speedup: 0.88
+norm_fp32x4                    mean time: 0.052608 ms, speedup: 0.91
+norm_fp16                      mean time: 0.033248 ms, speedup: 1.43
+norm_fp16x8_packed             mean time: 0.025280 ms, speedup: 1.88
 ####################################################################################################
 n: 1024, m: 4096
-torch                          mean time: 0.106976 ms
-norm_fp32                      mean time: 0.106160 ms, speedup: 1.01
-norm_fp32x4                    mean time: 0.104064 ms, speedup: 1.03
+torch                          mean time: 0.111424 ms
+norm_fp32                      mean time: 0.111280 ms, speedup: 1.00
+norm_fp32x4                    mean time: 0.110336 ms, speedup: 1.01
+norm_fp16                      mean time: 0.060320 ms, speedup: 1.85
+norm_fp16x8_packed             mean time: 0.053856 ms, speedup: 2.07
 ####################################################################################################
 n: 1024, m: 8192
-torch                          mean time: 0.214240 ms
-norm_fp32                      mean time: 0.208224 ms, speedup: 1.03
-norm_fp32x4                    mean time: 0.207440 ms, speedup: 1.03
+torch                          mean time: 0.211872 ms
+norm_fp32                      mean time: 0.206912 ms, speedup: 1.02
+norm_fp32x4                    mean time: 0.205552 ms, speedup: 1.03
+norm_fp16                      mean time: 0.112928 ms, speedup: 1.88
+norm_fp16x8_packed             mean time: 0.107008 ms, speedup: 1.98
 ####################################################################################################
 n: 1024, m: 12800
-torch                          mean time: 0.363344 ms
-norm_fp32                      mean time: 0.327584 ms, speedup: 1.11
-norm_fp32x4                    mean time: 0.323584 ms, speedup: 1.12
+torch                          mean time: 0.458320 ms
+norm_fp32                      mean time: 0.350544 ms, speedup: 1.31
+norm_fp32x4                    mean time: 0.344272 ms, speedup: 1.33
+norm_fp16                      mean time: 0.184640 ms, speedup: 2.48
+norm_fp16x8_packed             mean time: 0.164720 ms, speedup: 2.78
 ####################################################################################################
 n: 4096, m: 2048
-torch                          mean time: 0.208816 ms
-norm_fp32                      mean time: 0.218960 ms, speedup: 0.95
-norm_fp32x4                    mean time: 0.207184 ms, speedup: 1.01
+torch                          mean time: 0.209008 ms
+norm_fp32                      mean time: 0.207680 ms, speedup: 1.01
+norm_fp32x4                    mean time: 0.206848 ms, speedup: 1.01
+norm_fp16                      mean time: 0.108416 ms, speedup: 1.93
+norm_fp16x8_packed             mean time: 0.105712 ms, speedup: 1.98
 ####################################################################################################
 n: 4096, m: 4096
-torch                          mean time: 0.414640 ms
-norm_fp32                      mean time: 0.410368 ms, speedup: 1.01
-norm_fp32x4                    mean time: 0.405984 ms, speedup: 1.02
+torch                          mean time: 0.414272 ms
+norm_fp32                      mean time: 0.411104 ms, speedup: 1.01
+norm_fp32x4                    mean time: 0.405792 ms, speedup: 1.02
+norm_fp16                      mean time: 0.211952 ms, speedup: 1.95
+norm_fp16x8_packed             mean time: 0.207488 ms, speedup: 2.00
 ####################################################################################################
 n: 4096, m: 8192
-torch                          mean time: 0.823744 ms
-norm_fp32                      mean time: 0.817600 ms, speedup: 1.01
-norm_fp32x4                    mean time: 0.809456 ms, speedup: 1.02
+torch                          mean time: 0.820816 ms
+norm_fp32                      mean time: 0.813520 ms, speedup: 1.01
+norm_fp32x4                    mean time: 0.805072 ms, speedup: 1.02
+norm_fp16                      mean time: 0.418432 ms, speedup: 1.96
+norm_fp16x8_packed             mean time: 0.406032 ms, speedup: 2.02
 ####################################################################################################
 n: 4096, m: 12800
-torch                          mean time: 1.374640 ms
-norm_fp32                      mean time: 1.288704 ms, speedup: 1.07
-norm_fp32x4                    mean time: 1.288896 ms, speedup: 1.07
+torch                          mean time: 1.444640 ms
+norm_fp32                      mean time: 1.353856 ms, speedup: 1.07
+norm_fp32x4                    mean time: 1.358960 ms, speedup: 1.06
+norm_fp16                      mean time: 0.691024 ms, speedup: 2.09
+norm_fp16x8_packed             mean time: 0.673696 ms, speedup: 2.14
 ```
