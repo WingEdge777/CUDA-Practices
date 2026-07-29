@@ -77,6 +77,57 @@ __global__ void cumsum_fp32_kernel(float *a, float *b, int n) {
     }
 }
 
+// bf16: bf16 I/O, float accumulate (same structure as cumsum_fp32)
+template <const int BLOCK_SIZE = 256, const int CHUNK_SIZE = 256>
+__global__ void cumsum_bf16_kernel(__nv_bfloat16 *a, __nv_bfloat16 *b, int n) {
+    int tid = threadIdx.x;
+    int row = blockIdx.x;
+
+    const int num_warp = BLOCK_SIZE / 32;
+    const int warp_id = tid / 32;
+    const int lane_id = tid % 32;
+
+    __shared__ float smem[num_warp];
+    __shared__ float block_delta;
+
+    float delta = 0.f;
+    int row_offset = row * n;
+    for (int i = 0; i < n; i += BLOCK_SIZE) {
+        int col = i + tid;
+        float val = (col < n) ? __bfloat162float(a[row_offset + col]) : 0.0f;
+        val = _warp_cum_sum<32>(lane_id, val);
+
+        if (lane_id == 32 - 1)
+            smem[warp_id] = val;
+        __syncthreads();
+
+        if (warp_id == 0) {
+            float tmp_v = tid < num_warp ? smem[tid] : 0.f;
+            tmp_v = _warp_cum_sum<num_warp>(lane_id, tmp_v);
+            if (tid < num_warp)
+                smem[tid] = tmp_v;
+        }
+        __syncthreads();
+
+        if (warp_id > 0) {
+            val += smem[warp_id - 1];
+        }
+
+        val += delta;
+
+        if (col < n) {
+            b[row_offset + col] = __float2bfloat16(val);
+        }
+
+        if (tid == BLOCK_SIZE - 1) {
+            block_delta = val;
+        }
+        __syncthreads();
+
+        delta = block_delta;
+    }
+}
+
 template <const int warp_size = WARP_SIZE>
 __device__ __forceinline__ void _warp_cum_sum(int lane_id, pack128 &val) {
 #pragma unroll
@@ -86,6 +137,20 @@ __device__ __forceinline__ void _warp_cum_sum(int lane_id, pack128 &val) {
 #pragma unroll
             for (int k = 0; k < 4; k++)
                 val.f[k] += other_val;
+        }
+    }
+}
+
+// warp cumsum over N float registers using the last element as the lane aggregate
+template <const int N, const int warp_size = WARP_SIZE>
+__device__ __forceinline__ void _warp_cum_sum_n(int lane_id, float (&val)[N]) {
+#pragma unroll
+    for (int offset = 1; offset < WARP_SIZE; offset <<= 1) {
+        float other_val = __shfl_up_sync(0xffffffff, val[N - 1], offset);
+        if (lane_id >= offset) {
+#pragma unroll
+            for (int k = 0; k < N; k++)
+                val[k] += other_val;
         }
     }
 }
@@ -136,6 +201,73 @@ __global__ void cumsum_fp32x4_kernel(float *a, float *b, int n) {
 
         if (tid == BLOCK_SIZE - 1) {
             block_delta = f4.f[3];
+        }
+
+        __syncthreads();
+
+        delta = block_delta;
+    }
+}
+
+// bf16x8 packed r/w (same structure as cumsum_fp32x4)
+template <const int BLOCK_SIZE = 256, const int CHUNK_SIZE = 2048>
+__global__ void cumsum_bf16x8_packed_kernel(__nv_bfloat16 *a, __nv_bfloat16 *b, int n) {
+    int tid = threadIdx.x;
+    int row = blockIdx.x;
+
+    const int num_warp = BLOCK_SIZE / 32;
+    const int warp_id = tid / 32;
+    const int lane_id = tid % 32;
+
+    __shared__ float smem[num_warp];
+    __shared__ float block_delta;
+
+    float delta = 0.f;
+    int row_offset = row * n;
+    for (int i = 0; i < n; i += CHUNK_SIZE) {
+        int col = i + tid * 8;
+        pack128 in;
+        in.f4 = (col < n) ? LDST128BITS(a[row_offset + col]) : make_float4(0.f, 0.f, 0.f, 0.f);
+
+        float v[8];
+#pragma unroll
+        for (int j = 0; j < 4; j++) {
+            float2 f2 = (col < n) ? __bfloat1622float2(in.bf2[j]) : make_float2(0.f, 0.f);
+            v[j * 2] = f2.x;
+            v[j * 2 + 1] = f2.y;
+        }
+#pragma unroll
+        for (int k = 1; k < 8; k++)
+            v[k] += v[k - 1];
+        _warp_cum_sum_n<8, 32>(lane_id, v);
+
+        if (lane_id == 32 - 1)
+            smem[warp_id] = v[7];
+        __syncthreads();
+
+        if (warp_id == 0) {
+            float tmp_v = tid < num_warp ? smem[tid] : 0.f;
+            tmp_v = _warp_cum_sum<num_warp>(lane_id, tmp_v);
+            if (tid < num_warp)
+                smem[tid] = tmp_v;
+        }
+        __syncthreads();
+
+        float prefix = delta + (warp_id > 0 ? smem[warp_id - 1] : 0.f);
+#pragma unroll
+        for (int k = 0; k < 8; k++)
+            v[k] += prefix;
+
+        if (col < n) {
+            pack128 out;
+#pragma unroll
+            for (int j = 0; j < 4; j++)
+                out.bf2[j] = __float22bfloat162_rn(make_float2(v[j * 2], v[j * 2 + 1]));
+            LDST128BITS(b[row_offset + col]) = out.f4;
+        }
+
+        if (tid == BLOCK_SIZE - 1) {
+            block_delta = v[7];
         }
 
         __syncthreads();
@@ -263,7 +395,7 @@ cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, unsigned long long *tile
 
 #define CHECK_T(x) TORCH_CHECK(x.is_cuda() && x.is_contiguous(), #x " must be contiguous CUDA tensor")
 
-#define binding_func_gen(name, num, element_type)                                                                      \
+#define binding_func_gen(name, num, ptr_type)                                                                          \
     void name(torch::Tensor a, torch::Tensor b) {                                                                      \
         CHECK_T(a);                                                                                                    \
         CHECK_T(b);                                                                                                    \
@@ -275,11 +407,13 @@ cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, unsigned long long *tile
         cudaStream_t stream = at::cuda::getCurrentCUDAStream();                                                        \
                                                                                                                        \
         name##_kernel<threads_per_block, chunk_size><<<grid, threads_per_block, 0, stream>>>(                          \
-            reinterpret_cast<float *>(a.data_ptr()), reinterpret_cast<float *>(b.data_ptr()), lda);                    \
+            reinterpret_cast<ptr_type *>(a.data_ptr()), reinterpret_cast<ptr_type *>(b.data_ptr()), lda);              \
     }
 
 binding_func_gen(cumsum_fp32, 1, float);
 binding_func_gen(cumsum_fp32x4, 4, float);
+binding_func_gen(cumsum_bf16, 1, __nv_bfloat16);
+binding_func_gen(cumsum_bf16x8_packed, 8, __nv_bfloat16);
 
 void cumsum_fp32x4_multi_cta_scan(torch::Tensor a, torch::Tensor b) {
     CHECK_T(a);
@@ -311,5 +445,7 @@ void cumsum_fp32x4_multi_cta_scan(torch::Tensor a, torch::Tensor b) {
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(cumsum_fp32);
     torch_pybinding_func(cumsum_fp32x4);
+    torch_pybinding_func(cumsum_bf16);
+    torch_pybinding_func(cumsum_bf16x8_packed);
     torch_pybinding_func(cumsum_fp32x4_multi_cta_scan);
 }
