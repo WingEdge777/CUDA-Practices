@@ -122,7 +122,7 @@ __global__ void norm_fp32x4_kernel(float *a, float *b, int n) {
     }
 }
 
-// fp16: half I/O, float accumulate (same structure as norm_fp32)
+// fp16: half I/O, float accumulate
 template <const int BLOCK_SIZE = 256, const int CHUNK_SIZE = 256>
 __global__ void norm_fp16_kernel(half *a, half *b, int n) {
     int tid = threadIdx.x;
@@ -171,7 +171,7 @@ __global__ void norm_fp16_kernel(half *a, half *b, int n) {
     }
 }
 
-// fp16x8 packed r/w (same structure as norm_fp32x4)
+// fp16x8 packed r/w
 template <const int BLOCK_SIZE = 256, const int CHUNK_SIZE = 2048>
 __global__ void norm_fp16x8_packed_kernel(half *a, half *b, int n) {
     int tid = threadIdx.x;

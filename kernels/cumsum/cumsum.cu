@@ -77,7 +77,7 @@ __global__ void cumsum_fp32_kernel(float *a, float *b, int n) {
     }
 }
 
-// bf16: bf16 I/O, float accumulate (same structure as cumsum_fp32)
+// bf16: bf16 I/O, float accumulate
 template <const int BLOCK_SIZE = 256, const int CHUNK_SIZE = 256>
 __global__ void cumsum_bf16_kernel(__nv_bfloat16 *a, __nv_bfloat16 *b, int n) {
     int tid = threadIdx.x;
@@ -209,7 +209,7 @@ __global__ void cumsum_fp32x4_kernel(float *a, float *b, int n) {
     }
 }
 
-// bf16x8 packed r/w (same structure as cumsum_fp32x4)
+// bf16x8 packed r/w
 template <const int BLOCK_SIZE = 256, const int CHUNK_SIZE = 2048>
 __global__ void cumsum_bf16x8_packed_kernel(__nv_bfloat16 *a, __nv_bfloat16 *b, int n) {
     int tid = threadIdx.x;
@@ -276,12 +276,11 @@ __global__ void cumsum_bf16x8_packed_kernel(__nv_bfloat16 *a, __nv_bfloat16 *b, 
     }
 }
 
-// Decoupled Look-back (Merrill & Garland).
+// Multi-CTA chained scan tile state.
 // Pack {status:high32, float_bits:low32} so status and payload are one atomic word.
 enum ScanTileStatus : unsigned int {
     TILE_INVALID = 0,  // must be 0: workspace is zero-filled
-    TILE_PARTIAL = 1,  // aggregate of this tile only
-    TILE_INCLUSIVE = 2 // inclusive prefix through end of this tile
+    TILE_INCLUSIVE = 1 // inclusive prefix through end of this tile
 };
 
 __device__ __forceinline__ unsigned long long pack_tile_state(ScanTileStatus status, float value) {
@@ -353,30 +352,23 @@ cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, unsigned long long *tile
     unsigned long long *row_tiles = tile_state + static_cast<long long>(row) * num_chunks;
     float exclusive_prefix = 0.f;
 
-    // tid0 decoupled look-back: publish PARTIAL, scan predecessors, upgrade to INCLUSIVE.
+    // Chained multi-CTA scan: wait only for immediate predecessor's INCLUSIVE prefix.
+    // Local scans remain parallel across CTAs; prefix propagation is serial per row.
+    // (Full decoupled PARTIAL look-back is more racy under high CTA counts.)
     if (tid == 0) {
         if (chunk_id == 0) {
             store_tile_state(row_tiles + 0, TILE_INCLUSIVE, block_sum);
             exclusive_prefix = 0.f;
         } else {
-            store_tile_state(row_tiles + chunk_id, TILE_PARTIAL, block_sum);
-
-            int lookback = chunk_id - 1;
             while (true) {
                 ScanTileStatus status;
-                float value;
-                load_tile_state(row_tiles + lookback, status, value);
+                float pred_inclusive;
+                load_tile_state(row_tiles + (chunk_id - 1), status, pred_inclusive);
                 if (status == TILE_INCLUSIVE) {
-                    exclusive_prefix += value;
+                    exclusive_prefix = pred_inclusive;
                     break;
                 }
-                if (status == TILE_PARTIAL) {
-                    exclusive_prefix += value;
-                    --lookback; // tile 0 never publishes PARTIAL, so lookback stays >= 0
-                }
-                // TILE_INVALID: spin on the same predecessor
             }
-
             store_tile_state(row_tiles + chunk_id, TILE_INCLUSIVE, exclusive_prefix + block_sum);
         }
         exclusive_prefix_smem = exclusive_prefix;
