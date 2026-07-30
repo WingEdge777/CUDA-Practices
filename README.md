@@ -137,16 +137,21 @@ All kernels were tested on an RTX 5060 Laptop GPU (unless otherwise noted) and b
   - [x] `dot_product_fp16x2` — FP16 vectorized (×2)
   - [x] `dot_product_fp16x8` — FP16 vectorized (×8, packed r/w)
   - [x] PyTorch op binding & correctness check
-- [cumsum](./kernels/cumsum/) - Warp-shuffle-based reductions
+- [cumsum](./kernels/cumsum/) - Warp-shuffle-based scan
   - [x] naive Torch cumsum
   - [x] `cumsum_fp32`
-  - [x] `cumsum_fp32x4`
-  - [x] `cumsum_fp32x4_split_k`
+  - [x] `cumsum_fp32x4` — FP32 vectorized (×4)
+  - [x] `cumsum_bf16`
+  - [x] `cumsum_bf16x8_packed` — BF16 vectorized (×8, packed r/w)
+  - [x] `cumsum_fp32x4_multi_cta_scan` — multi-CTA decoupled look-back
   - [x] pytorch op bindings && diff check
 - [normalization](./kernels/normalization/) - (x - mean) / std
   - [x] naive Torch norm
-  - [x] norm — FP32
-  - [x] norm — FP32x4
+  - [x] `norm_fp32`
+  - [x] `norm_fp32x4` — FP32 vectorized (×4)
+  - [x] `norm_fp16`
+  - [x] `norm_fp16x8_packed` — FP16 vectorized (×8, packed r/w)
+  - [x] `norm_fp32x4_split_k` — split-k two-pass
   - [x] pytorch op bindings && diff check
 - [softmax](./kernels/softmax/) — Safe online softmax
   - [x] One-pass
