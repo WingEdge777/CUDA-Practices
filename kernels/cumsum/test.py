@@ -90,9 +90,9 @@ if __name__ == "__main__":
             benchmark(lib.cumsum_fp32x4, a, b_my, prefix="cumsum_fp32x4")
             diff_check(b, b_my, prefix="cumsum_fp32x4")
 
-            # b_my = torch.zeros_like(b)
-            # benchmark(lib.cumsum_fp32x4_multi_cta_scan, a, b_my, prefix="cumsum_fp32x4_multi_cta_scan")
-            # diff_check(b, b_my, prefix="cumsum_fp32x4_multi_cta_scan")
+            b_my = torch.zeros_like(b)
+            benchmark(lib.cumsum_fp32x4_split_k, a, b_my, prefix="cumsum_fp32x4_split_k")
+            diff_check(b, b_my, prefix="cumsum_fp32x4_split_k")
 
             a_bf = a.bfloat16()
             b_ref = torch.cumsum(a_bf.float(), dim=-1).bfloat16()

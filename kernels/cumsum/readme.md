@@ -9,7 +9,7 @@ cumsum kernels.
 - [x] cumsum — FP32x4
 - [x] cumsum — BF16
 - [x] cumsum — BF16x8 packed
-- [x] cumsum — FP32x4 multi-CTA scan (decoupled look-back)
+- [x] cumsum — FP32x4 split-k
 - [x] pytorch op bindings && diff check
 
 ## Run tests

@@ -276,36 +276,16 @@ __global__ void cumsum_bf16x8_packed_kernel(__nv_bfloat16 *a, __nv_bfloat16 *b, 
     }
 }
 
-// Decoupled Look-back (Merrill & Garland).
-// Pack {status:high32, float_bits:low32} into one 64-bit atomic word so a reader
-// always observes a consistent (status, payload) pair — required because plain
-// CUDA atomics on separate status/value arrays are relaxed and can tear.
-enum ScanTileStatus : unsigned int {
-    TILE_INVALID = 0,  // must be 0: workspace is zero-filled
-    TILE_PARTIAL = 1,  // payload = tile aggregate
-    TILE_INCLUSIVE = 2 // payload = inclusive prefix through this tile
-};
-
-__device__ __forceinline__ unsigned long long pack_tile_state(ScanTileStatus status, float value) {
-    return (static_cast<unsigned long long>(status) << 32) | static_cast<unsigned long long>(__float_as_uint(value));
+template <const int warp_size = WARP_SIZE>
+__device__ __forceinline__ void _warp_reduce(float &val) {
+#pragma unroll
+    for (int offset = 1; offset < WARP_SIZE; offset <<= 1)
+        val += __shfl_xor_sync(0xffffffff, val, offset);
 }
 
-__device__ __forceinline__ void unpack_tile_state(unsigned long long packed, ScanTileStatus &status, float &value) {
-    status = static_cast<ScanTileStatus>(static_cast<unsigned int>(packed >> 32));
-    value = __uint_as_float(static_cast<unsigned int>(packed));
-}
-
-__device__ __forceinline__ void store_tile_state(unsigned long long *addr, ScanTileStatus status, float value) {
-    atomicExch(addr, pack_tile_state(status, value));
-}
-
-__device__ __forceinline__ void load_tile_state(unsigned long long *addr, ScanTileStatus &status, float &value) {
-    unpack_tile_state(atomicOr(addr, 0ull), status, value);
-}
-
+// split-k pass 1: local inclusive scan + write chunk sum
 template <const int BLOCK_SIZE = 256, const int CHUNK_SIZE = 1024>
-__global__ void
-cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, unsigned long long *tile_state, int n, int num_chunks) {
+__global__ void cumsum_fp32x4_split_k_pass_1_kernel(float *a, float *b, float *ws_sum, int n) {
     int tid = threadIdx.x;
     int chunk_id = blockIdx.x;
     int row = blockIdx.y;
@@ -315,11 +295,9 @@ cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, unsigned long long *tile
     const int lane_id = tid % 32;
 
     __shared__ float smem[num_warp];
-    __shared__ float exclusive_prefix_smem;
 
     int row_offset = row * n;
     int col = chunk_id * CHUNK_SIZE + tid * 4;
-
     pack128 f4;
     f4.f4 = (col < n) ? FLOAT4(a[row_offset + col]) : make_float4(0.f, 0.f, 0.f, 0.f);
 #pragma unroll
@@ -339,56 +317,59 @@ cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, unsigned long long *tile
     }
     __syncthreads();
 
-    float local_prefix = (warp_id > 0 ? smem[warp_id - 1] : 0.f);
+    float prefix = (warp_id > 0 ? smem[warp_id - 1] : 0.f);
 #pragma unroll
     for (int k = 0; k < 4; k++)
-        f4.f[k] += local_prefix;
-
-    if (tid == BLOCK_SIZE - 1) {
-        smem[0] = f4.f[3];
-    }
-    __syncthreads();
-    float block_sum = smem[0];
-
-    unsigned long long *row_tiles = tile_state + static_cast<long long>(row) * num_chunks;
-    float exclusive_prefix = 0.f;
-
-    // tid0 decoupled look-back: PARTIAL lets successors proceed without waiting for our prefix.
-    if (tid == 0) {
-        if (chunk_id == 0) {
-            store_tile_state(row_tiles + 0, TILE_INCLUSIVE, block_sum);
-            exclusive_prefix = 0.f;
-        } else {
-            store_tile_state(row_tiles + chunk_id, TILE_PARTIAL, block_sum);
-
-            int lookback = chunk_id - 1;
-            while (true) {
-                ScanTileStatus status;
-                float value;
-                load_tile_state(row_tiles + lookback, status, value);
-                if (status == TILE_INCLUSIVE) {
-                    exclusive_prefix += value;
-                    break;
-                }
-                if (status == TILE_PARTIAL) {
-                    exclusive_prefix += value;
-                    --lookback; // tile 0 only publishes INCLUSIVE
-                }
-                // TILE_INVALID: spin on same predecessor
-            }
-
-            store_tile_state(row_tiles + chunk_id, TILE_INCLUSIVE, exclusive_prefix + block_sum);
-        }
-        exclusive_prefix_smem = exclusive_prefix;
-    }
-    __syncthreads();
-
-    exclusive_prefix = exclusive_prefix_smem;
-#pragma unroll
-    for (int k = 0; k < 4; k++)
-        f4.f[k] += exclusive_prefix;
+        f4.f[k] += prefix;
 
     if (col < n) {
+        FLOAT4(b[row_offset + col]) = f4.f4;
+    }
+
+    if (tid == BLOCK_SIZE - 1) {
+        ws_sum[row * gridDim.x + chunk_id] = f4.f[3];
+    }
+}
+
+// split-k pass 2: exclusive prefix of chunk sums + add back
+template <const int BLOCK_SIZE = 256, const int CHUNK_SIZE = 1024>
+__global__ void cumsum_fp32x4_split_k_pass_2_kernel(float *b, float *ws_sum, int n) {
+    int tid = threadIdx.x;
+    int chunk_id = blockIdx.x;
+    int row = blockIdx.y;
+    int blocks_per_row = gridDim.x;
+
+    const int num_warp = BLOCK_SIZE / 32;
+    const int warp_id = tid / 32;
+    const int lane_id = tid % 32;
+
+    __shared__ float smem[num_warp];
+    __shared__ float prefix_s;
+
+    float val = 0.f;
+    for (int i = tid; i < chunk_id; i += BLOCK_SIZE)
+        val += ws_sum[row * blocks_per_row + i];
+    _warp_reduce(val);
+    if (lane_id == 0)
+        smem[warp_id] = val;
+    __syncthreads();
+    if (warp_id == 0) {
+        float x = tid < num_warp ? smem[tid] : 0.f;
+        _warp_reduce<num_warp>(x);
+        if (tid == 0)
+            prefix_s = x;
+    }
+    __syncthreads();
+    float prefix = prefix_s;
+
+    int row_offset = row * n;
+    int col = chunk_id * CHUNK_SIZE + tid * 4;
+    if (col < n) {
+        pack128 f4;
+        f4.f4 = FLOAT4(b[row_offset + col]);
+#pragma unroll
+        for (int k = 0; k < 4; k++)
+            f4.f[k] += prefix;
         FLOAT4(b[row_offset + col]) = f4.f4;
     }
 }
@@ -415,7 +396,7 @@ binding_func_gen(cumsum_fp32x4, 4, float);
 binding_func_gen(cumsum_bf16, 1, __nv_bfloat16);
 binding_func_gen(cumsum_bf16x8_packed, 8, __nv_bfloat16);
 
-void cumsum_fp32x4_multi_cta_scan(torch::Tensor a, torch::Tensor b) {
+void cumsum_fp32x4_split_k(torch::Tensor a, torch::Tensor b) {
     CHECK_T(a);
     CHECK_T(b);
     const int bs = a.size(0);
@@ -423,22 +404,20 @@ void cumsum_fp32x4_multi_cta_scan(torch::Tensor a, torch::Tensor b) {
     constexpr int threads_per_block = 256;
     constexpr int vec = 4;
     constexpr int chunk_size = threads_per_block * vec;
-    const int num_chunks = (lda + chunk_size - 1) / chunk_size;
-    auto stream = at::cuda::getCurrentCUDAStream();
+    const int blocks_per_row = (lda + chunk_size - 1) / chunk_size;
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-    auto options = torch::TensorOptions().dtype(torch::kLong).device(a.device());
-    auto tile_state = torch::empty({bs, num_chunks}, options);
-    tile_state.record_stream(stream);
-    TORCH_CHECK(cudaMemsetAsync(tile_state.data_ptr(), 0, tile_state.nbytes(), stream.stream()) == cudaSuccess);
+    auto options = torch::TensorOptions().dtype(torch::kFloat32).device(a.device());
+    auto ws_sum = torch::empty({bs, blocks_per_row}, options);
 
-    dim3 grid(num_chunks, bs);
-    cumsum_fp32x4_multi_cta_scan_kernel<threads_per_block, chunk_size>
-        <<<grid, threads_per_block, 0, stream.stream()>>>(reinterpret_cast<float *>(a.data_ptr()),
-                                                          reinterpret_cast<float *>(b.data_ptr()),
-                                                          reinterpret_cast<unsigned long long *>(tile_state.data_ptr()),
-                                                          lda,
-                                                          num_chunks);
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    dim3 grid(blocks_per_row, bs);
+    cumsum_fp32x4_split_k_pass_1_kernel<threads_per_block, chunk_size>
+        <<<grid, threads_per_block, 0, stream>>>(reinterpret_cast<float *>(a.data_ptr()),
+                                                 reinterpret_cast<float *>(b.data_ptr()),
+                                                 ws_sum.data_ptr<float>(),
+                                                 lda);
+    cumsum_fp32x4_split_k_pass_2_kernel<threads_per_block, chunk_size><<<grid, threads_per_block, 0, stream>>>(
+        reinterpret_cast<float *>(b.data_ptr()), ws_sum.data_ptr<float>(), lda);
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -446,5 +425,5 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(cumsum_fp32x4);
     torch_pybinding_func(cumsum_bf16);
     torch_pybinding_func(cumsum_bf16x8_packed);
-    torch_pybinding_func(cumsum_fp32x4_multi_cta_scan);
+    torch_pybinding_func(cumsum_fp32x4_split_k);
 }
