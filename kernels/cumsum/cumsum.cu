@@ -276,11 +276,14 @@ __global__ void cumsum_bf16x8_packed_kernel(__nv_bfloat16 *a, __nv_bfloat16 *b, 
     }
 }
 
-// Multi-CTA chained scan tile state.
-// Pack {status:high32, float_bits:low32} so status and payload are one atomic word.
+// Decoupled Look-back (Merrill & Garland).
+// Pack {status:high32, float_bits:low32} into one 64-bit atomic word so a reader
+// always observes a consistent (status, payload) pair — required because plain
+// CUDA atomics on separate status/value arrays are relaxed and can tear.
 enum ScanTileStatus : unsigned int {
     TILE_INVALID = 0,  // must be 0: workspace is zero-filled
-    TILE_INCLUSIVE = 1 // inclusive prefix through end of this tile
+    TILE_PARTIAL = 1,  // payload = tile aggregate
+    TILE_INCLUSIVE = 2 // payload = inclusive prefix through this tile
 };
 
 __device__ __forceinline__ unsigned long long pack_tile_state(ScanTileStatus status, float value) {
@@ -294,7 +297,6 @@ __device__ __forceinline__ void unpack_tile_state(unsigned long long packed, Sca
 
 __device__ __forceinline__ void store_tile_state(unsigned long long *addr, ScanTileStatus status, float value) {
     atomicExch(addr, pack_tile_state(status, value));
-    __threadfence();
 }
 
 __device__ __forceinline__ void load_tile_state(unsigned long long *addr, ScanTileStatus &status, float &value) {
@@ -342,7 +344,6 @@ cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, unsigned long long *tile
     for (int k = 0; k < 4; k++)
         f4.f[k] += local_prefix;
 
-    // Block aggregate = last thread's inclusive sum (tail padding is zero).
     if (tid == BLOCK_SIZE - 1) {
         smem[0] = f4.f[3];
     }
@@ -352,23 +353,30 @@ cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, unsigned long long *tile
     unsigned long long *row_tiles = tile_state + static_cast<long long>(row) * num_chunks;
     float exclusive_prefix = 0.f;
 
-    // Chained multi-CTA scan: wait only for immediate predecessor's INCLUSIVE prefix.
-    // Local scans remain parallel across CTAs; prefix propagation is serial per row.
-    // (Full decoupled PARTIAL look-back is more racy under high CTA counts.)
+    // tid0 decoupled look-back: PARTIAL lets successors proceed without waiting for our prefix.
     if (tid == 0) {
         if (chunk_id == 0) {
             store_tile_state(row_tiles + 0, TILE_INCLUSIVE, block_sum);
             exclusive_prefix = 0.f;
         } else {
+            store_tile_state(row_tiles + chunk_id, TILE_PARTIAL, block_sum);
+
+            int lookback = chunk_id - 1;
             while (true) {
                 ScanTileStatus status;
-                float pred_inclusive;
-                load_tile_state(row_tiles + (chunk_id - 1), status, pred_inclusive);
+                float value;
+                load_tile_state(row_tiles + lookback, status, value);
                 if (status == TILE_INCLUSIVE) {
-                    exclusive_prefix = pred_inclusive;
+                    exclusive_prefix += value;
                     break;
                 }
+                if (status == TILE_PARTIAL) {
+                    exclusive_prefix += value;
+                    --lookback; // tile 0 only publishes INCLUSIVE
+                }
+                // TILE_INVALID: spin on same predecessor
             }
+
             store_tile_state(row_tiles + chunk_id, TILE_INCLUSIVE, exclusive_prefix + block_sum);
         }
         exclusive_prefix_smem = exclusive_prefix;
@@ -420,7 +428,6 @@ void cumsum_fp32x4_multi_cta_scan(torch::Tensor a, torch::Tensor b) {
 
     auto options = torch::TensorOptions().dtype(torch::kLong).device(a.device());
     auto tile_state = torch::empty({bs, num_chunks}, options);
-    // Explicit memset on the launch stream + record_stream so raw <<<>>> cannot race the allocator.
     tile_state.record_stream(stream);
     TORCH_CHECK(cudaMemsetAsync(tile_state.data_ptr(), 0, tile_state.nbytes(), stream.stream()) == cudaSuccess);
 
