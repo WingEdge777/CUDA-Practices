@@ -443,8 +443,8 @@ void cumsum_fp32x4_multi_cta_scan(torch::Tensor a, torch::Tensor b) {
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(cumsum_fp32);
     torch_pybinding_func(cumsum_fp32x4);
-    torch_pybinding_func(cumsum_bf16);
-    torch_pybinding_func(cumsum_bf16x8_packed);
     torch_pybinding_func(cumsum_fp32x4_split_k);
     torch_pybinding_func(cumsum_fp32x4_multi_cta_scan);
+    torch_pybinding_func(cumsum_bf16);
+    torch_pybinding_func(cumsum_bf16x8_packed);
 }
