@@ -7,9 +7,10 @@ cumsum kernels.
 - [x] naive Torch cumsum
 - [x] cumsum — FP32
 - [x] cumsum — FP32x4
+- [x] cumsum — FP32x4 split-k
+- [ ] cumsum — FP32x4 multi-CTA scan
 - [x] cumsum — BF16
 - [x] cumsum — BF16x8 packed
-- [x] cumsum — FP32x4 split-k
 - [x] pytorch op bindings && diff check
 
 ## Run tests

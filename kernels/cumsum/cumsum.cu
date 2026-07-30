@@ -374,6 +374,10 @@ __global__ void cumsum_fp32x4_split_k_pass_2_kernel(float *b, float *ws_sum, int
     }
 }
 
+// multi-CTA single kernel (TODO)
+template <const int BLOCK_SIZE = 256, const int CHUNK_SIZE = 1024>
+__global__ void cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, int n) {}
+
 #define CHECK_T(x) TORCH_CHECK(x.is_cuda() && x.is_contiguous(), #x " must be contiguous CUDA tensor")
 
 #define binding_func_gen(name, num, ptr_type)                                                                          \
@@ -420,10 +424,27 @@ void cumsum_fp32x4_split_k(torch::Tensor a, torch::Tensor b) {
         reinterpret_cast<float *>(b.data_ptr()), ws_sum.data_ptr<float>(), lda);
 }
 
+void cumsum_fp32x4_multi_cta_scan(torch::Tensor a, torch::Tensor b) {
+    CHECK_T(a);
+    CHECK_T(b);
+    const int bs = a.size(0);
+    const int lda = a.size(1);
+    constexpr int threads_per_block = 256;
+    constexpr int vec = 4;
+    constexpr int chunk_size = threads_per_block * vec;
+    const int blocks_per_row = (lda + chunk_size - 1) / chunk_size;
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+    dim3 grid(blocks_per_row, bs);
+    cumsum_fp32x4_multi_cta_scan_kernel<threads_per_block, chunk_size><<<grid, threads_per_block, 0, stream>>>(
+        reinterpret_cast<float *>(a.data_ptr()), reinterpret_cast<float *>(b.data_ptr()), lda);
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(cumsum_fp32);
     torch_pybinding_func(cumsum_fp32x4);
     torch_pybinding_func(cumsum_bf16);
     torch_pybinding_func(cumsum_bf16x8_packed);
     torch_pybinding_func(cumsum_fp32x4_split_k);
+    torch_pybinding_func(cumsum_fp32x4_multi_cta_scan);
 }
