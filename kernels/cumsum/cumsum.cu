@@ -374,9 +374,107 @@ __global__ void cumsum_fp32x4_split_k_pass_2_kernel(float *b, float *ws_sum, int
     }
 }
 
-// multi-CTA single kernel (TODO)
+// Decoupled look-back tile: high 32b = status, low 32b = float bits
+enum ScanTileStatus : unsigned int { TILE_EMPTY = 0, TILE_PARTIAL = 1, TILE_INCLUSIVE = 2 };
+
+__device__ __forceinline__ unsigned long long pack_tile(ScanTileStatus status, float val) {
+    return (static_cast<unsigned long long>(status) << 32) | static_cast<unsigned long long>(__float_as_uint(val));
+}
+
+__device__ __forceinline__ void unpack_tile(unsigned long long packed, ScanTileStatus &status, float &val) {
+    status = static_cast<ScanTileStatus>(packed >> 32);
+    val = __uint_as_float(static_cast<unsigned int>(packed));
+}
+
+__device__ __forceinline__ unsigned long long load_tile(unsigned long long *ptr) { return atomicOr(ptr, 0ull); }
+
+// multi-CTA single kernel: local inclusive scan + decoupled look-back
 template <const int BLOCK_SIZE = 256, const int CHUNK_SIZE = 1024>
-__global__ void cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, int n) {}
+__global__ void cumsum_fp32x4_multi_cta_scan_kernel(float *a, float *b, unsigned long long *tile_state, int n) {
+    int tid = threadIdx.x;
+    int chunk_id = blockIdx.x;
+    int row = blockIdx.y;
+    int blocks_per_row = gridDim.x;
+
+    const int num_warp = BLOCK_SIZE / 32;
+    const int warp_id = tid / 32;
+    const int lane_id = tid % 32;
+
+    __shared__ float smem[num_warp];
+    __shared__ float block_sum_s;
+    __shared__ float prefix_s;
+
+    int row_offset = row * n;
+    int col = chunk_id * CHUNK_SIZE + tid * 4;
+    pack128 f4;
+    f4.f4 = (col < n) ? FLOAT4(a[row_offset + col]) : make_float4(0.f, 0.f, 0.f, 0.f);
+#pragma unroll
+    for (int k = 1; k < 4; k++)
+        f4.f[k] += f4.f[k - 1];
+    _warp_cum_sum<32>(lane_id, f4);
+
+    if (lane_id == 32 - 1)
+        smem[warp_id] = f4.f[3];
+    __syncthreads();
+
+    if (warp_id == 0) {
+        float tmp_v = tid < num_warp ? smem[tid] : 0.f;
+        tmp_v = _warp_cum_sum<num_warp>(lane_id, tmp_v);
+        if (tid < num_warp)
+            smem[tid] = tmp_v;
+    }
+    __syncthreads();
+
+    float local_prefix = (warp_id > 0 ? smem[warp_id - 1] : 0.f);
+#pragma unroll
+    for (int k = 0; k < 4; k++)
+        f4.f[k] += local_prefix;
+
+    if (tid == BLOCK_SIZE - 1)
+        block_sum_s = f4.f[3];
+    __syncthreads();
+    float block_sum = block_sum_s;
+
+    unsigned long long *row_tiles = tile_state + row * blocks_per_row;
+
+    if (tid == 0) {
+        float exclusive = 0.f;
+        if (chunk_id == 0) {
+            atomicExch(row_tiles + 0, pack_tile(TILE_INCLUSIVE, block_sum));
+        } else {
+            atomicExch(row_tiles + chunk_id, pack_tile(TILE_PARTIAL, block_sum));
+
+            int pred = chunk_id - 1;
+            while (pred >= 0) {
+                ScanTileStatus status;
+                float val;
+                unsigned long long packed;
+                do {
+                    packed = load_tile(row_tiles + pred);
+                    unpack_tile(packed, status, val);
+                } while (status == TILE_EMPTY);
+
+                exclusive += val;
+                if (status == TILE_INCLUSIVE)
+                    break;
+                --pred;
+            }
+
+            atomicExch(row_tiles + chunk_id, pack_tile(TILE_INCLUSIVE, exclusive + block_sum));
+        }
+        prefix_s = exclusive;
+    }
+    __syncthreads();
+    float prefix = prefix_s;
+
+#pragma unroll
+    for (int k = 0; k < 4; k++)
+        f4.f[k] += prefix;
+
+    if (col < n) {
+        FLOAT4(b[row_offset + col]) = f4.f4;
+    }
+}
 
 #define CHECK_T(x) TORCH_CHECK(x.is_cuda() && x.is_contiguous(), #x " must be contiguous CUDA tensor")
 
@@ -435,9 +533,15 @@ void cumsum_fp32x4_multi_cta_scan(torch::Tensor a, torch::Tensor b) {
     const int blocks_per_row = (lda + chunk_size - 1) / chunk_size;
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
+    auto options = torch::TensorOptions().dtype(torch::kLong).device(a.device());
+    auto tile_state = torch::zeros({bs, blocks_per_row}, options);
+
     dim3 grid(blocks_per_row, bs);
-    cumsum_fp32x4_multi_cta_scan_kernel<threads_per_block, chunk_size><<<grid, threads_per_block, 0, stream>>>(
-        reinterpret_cast<float *>(a.data_ptr()), reinterpret_cast<float *>(b.data_ptr()), lda);
+    cumsum_fp32x4_multi_cta_scan_kernel<threads_per_block, chunk_size>
+        <<<grid, threads_per_block, 0, stream>>>(reinterpret_cast<float *>(a.data_ptr()),
+                                                 reinterpret_cast<float *>(b.data_ptr()),
+                                                 reinterpret_cast<unsigned long long *>(tile_state.data_ptr()),
+                                                 lda);
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

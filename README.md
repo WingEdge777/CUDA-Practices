@@ -144,6 +144,7 @@ All kernels were tested on an RTX 5060 Laptop GPU (unless otherwise noted) and b
   - [x] `cumsum_bf16`
   - [x] `cumsum_bf16x8_packed` — BF16 vectorized (×8, packed r/w)
   - [x] `cumsum_fp32x4_split_k` — split-k two-pass
+  - [x] `cumsum_fp32x4_multi_cta_scan` — multi-CTA single kernel (decoupled look-back)
   - [x] pytorch op bindings && diff check
 - [normalization](./kernels/normalization/) - (x - mean) / std
   - [x] naive Torch norm
