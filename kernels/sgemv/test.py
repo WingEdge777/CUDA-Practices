@@ -1,7 +1,7 @@
-import numpy as np
 from functools import partial
 from pathlib import Path
 
+import numpy as np
 import torch
 from flashinfer.testing.utils import bench_gpu_time
 from torch.utils.cpp_extension import load
@@ -81,3 +81,7 @@ if __name__ == "__main__":
             benchmark(lib.gemv_fp32x4, a, b, c_my, prefix="gemv_fp32x4")
             # print(c.flatten(), c_my.flatten())
             diff_check(c, c_my, prefix="gemv_fp32x4")
+
+            c_my = torch.zeros_like(c)
+            benchmark(lib.gemv_fp32x4_split_k, a, b, c_my, prefix="gemv_fp32x4_split_k")
+            diff_check(c, c_my, prefix="gemv_fp32x4_split_k")

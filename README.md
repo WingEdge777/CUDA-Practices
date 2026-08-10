@@ -189,6 +189,8 @@ All kernels were tested on an RTX 5060 Laptop GPU (unless otherwise noted) and b
 - [sgemv](./kernels/sgemv/) — Single-precision GEMV
   - [x] `gemv_fp32` — baseline
   - [x] `gemv_fp32x4` — vectorized loads (×4)
+  - [x] `gemv_fp32x4_split_k` — split-k two-pass
+  - [x] PyTorch op binding & correctness check
   - [x] PyTorch op binding & correctness check
 - [sgemm](./kernels/sgemm/) — Single-precision GEMM (SIMT)
   - [x] `sgemm_cublas` — cuBLAS FP32 baseline

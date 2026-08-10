@@ -96,6 +96,69 @@ __global__ void gemv_fp32x4_kernel(float *a, float *b, float *c, int out_channel
     }
 }
 
+// split-k pass 1: partial gemv per K-chunk
+template <const int BLOCK_SIZE = 128, const int CHUNK_SIZE = 512>
+__global__ void gemv_fp32x4_split_k_pass_1_kernel(float *a, float *b, float *ws, int out_channels, int in_channels) {
+    const int ROWS_PER_BLOCK = 4;
+
+    int tid = threadIdx.x;
+    int chunk_id = blockIdx.x;
+    int row_start = blockIdx.y * ROWS_PER_BLOCK;
+    int num_chunks = gridDim.x;
+
+    float sum[ROWS_PER_BLOCK] = {0.0f};
+
+    int k = chunk_id * CHUNK_SIZE + tid * 4;
+    if (k < in_channels) {
+        float4 vb = LDST128BITS(b[k]);
+#pragma unroll
+        for (int r = 0; r < ROWS_PER_BLOCK; ++r) {
+            int current_row = row_start + r;
+            float4 va = LDST128BITS(a[current_row * in_channels + k]);
+            sum[r] += va.x * vb.x;
+            sum[r] += va.y * vb.y;
+            sum[r] += va.z * vb.z;
+            sum[r] += va.w * vb.w;
+        }
+    }
+
+#pragma unroll
+    for (int r = 0; r < ROWS_PER_BLOCK; ++r) {
+        float res = _block_reduce_sum<BLOCK_SIZE / WARP_SIZE>(sum[r]);
+        if (tid == 0) {
+            ws[(row_start + r) * num_chunks + chunk_id] = res;
+        }
+    }
+}
+
+// split-k pass 2: reduce partials along K-chunks
+template <const int BLOCK_SIZE = 128>
+__global__ void gemv_fp32x4_split_k_pass_2_kernel(float *ws, float *c, int out_channels, int num_chunks) {
+    const int ROWS_PER_BLOCK = 4;
+
+    int tid = threadIdx.x;
+    int row_start = blockIdx.x * ROWS_PER_BLOCK;
+
+    float sum[ROWS_PER_BLOCK] = {0.0f};
+    for (int i = tid; i < num_chunks; i += BLOCK_SIZE) {
+#pragma unroll
+        for (int r = 0; r < ROWS_PER_BLOCK; ++r)
+            sum[r] += ws[(row_start + r) * num_chunks + i];
+    }
+
+    pack128 out_pack;
+#pragma unroll
+    for (int r = 0; r < ROWS_PER_BLOCK; ++r) {
+        float res = _block_reduce_sum<BLOCK_SIZE / WARP_SIZE>(sum[r]);
+        if (tid == 0) {
+            out_pack.f[r] = res;
+        }
+    }
+    if (tid == 0) {
+        LDST128BITS(c[row_start]) = out_pack.f4;
+    }
+}
+
 #define CHECK_T(x) TORCH_CHECK(x.is_cuda() && x.is_contiguous(), #x " must be contiguous CUDA tensor")
 
 #define binding_func_gen(name, num, element_dtype)                                                                     \
@@ -115,9 +178,30 @@ __global__ void gemv_fp32x4_kernel(float *a, float *b, float *c, int out_channel
 binding_func_gen(gemv, 1, float);
 binding_func_gen(gemv_fp32x4, 4, float);
 
-// binding
+void gemv_fp32x4_split_k(torch::Tensor a, torch::Tensor b, torch::Tensor c) {
+    CHECK_T(a);
+    CHECK_T(b);
+    const int out_channels = a.size(0);
+    const int in_channels = a.size(1);
+    constexpr int threads_per_block = 128;
+    constexpr int rows_per_block = 4;
+    constexpr int chunk_size = threads_per_block * 4;
+    const int num_chunks = (in_channels + chunk_size - 1) / chunk_size;
+    const int num_row_blocks = (out_channels + rows_per_block - 1) / rows_per_block;
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+    auto options = torch::TensorOptions().dtype(torch::kFloat32).device(a.device());
+    auto ws = torch::empty({out_channels, num_chunks}, options);
+
+    dim3 grid1(num_chunks, num_row_blocks);
+    gemv_fp32x4_split_k_pass_1_kernel<threads_per_block, chunk_size><<<grid1, threads_per_block, 0, stream>>>(
+        a.data_ptr<float>(), b.data_ptr<float>(), ws.data_ptr<float>(), out_channels, in_channels);
+    gemv_fp32x4_split_k_pass_2_kernel<threads_per_block><<<num_row_blocks, threads_per_block, 0, stream>>>(
+        ws.data_ptr<float>(), c.data_ptr<float>(), out_channels, num_chunks);
+}
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     torch_pybinding_func(gemv);
     torch_pybinding_func(gemv_fp32x4);
+    torch_pybinding_func(gemv_fp32x4_split_k);
 }

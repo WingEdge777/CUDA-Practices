@@ -8,6 +8,7 @@ This folder keeps a few small reference kernels for practice.
 
 - [x] gemv — FP32
 - [x] gemv_fp32x4 — FP32 with vectorized loads
+- [x] gemv_fp32x4_split_k — split-k two-pass
 - [x] pytorch op bindings && diff check
 
 ## Run tests
